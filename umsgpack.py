@@ -48,6 +48,7 @@ import collections
 import datetime
 import sys
 import io
+import numpy as np
 
 if sys.version_info[0:2] >= (3, 3):
     from collections.abc import Hashable
@@ -286,29 +287,29 @@ b'\x92\xabsome string\xaasome bytes'
 
 
 def _pack_integer(obj, fp, options):
-    if obj < 0:
-        if obj >= -32:
+    if isinstance(obj, np.signedinteger):
+        if obj >= -32 and isinstance(obj, np.int8):
             fp.write(struct.pack("b", obj))
-        elif obj >= -2**(8 - 1):
+        elif isinstance(obj, np.int8):
             fp.write(b"\xd0" + struct.pack("b", obj))
-        elif obj >= -2**(16 - 1):
+        elif isinstance(obj, np.int16):
             fp.write(b"\xd1" + struct.pack(">h", obj))
-        elif obj >= -2**(32 - 1):
+        elif isinstance(obj, np.int32):
             fp.write(b"\xd2" + struct.pack(">i", obj))
-        elif obj >= -2**(64 - 1):
+        elif isinstance(obj, np.int64):
             fp.write(b"\xd3" + struct.pack(">q", obj))
         else:
             raise UnsupportedTypeException("huge signed int")
     else:
-        if obj < 128:
+        if obj < 128 and isinstance(obj, np.uint8):
             fp.write(struct.pack("B", obj))
-        elif obj < 2**8:
+        elif isinstance(obj, np.uint8):
             fp.write(b"\xcc" + struct.pack("B", obj))
-        elif obj < 2**16:
+        elif isinstance(obj, np.uint16):
             fp.write(b"\xcd" + struct.pack(">H", obj))
-        elif obj < 2**32:
+        elif isinstance(obj, np.uint32):
             fp.write(b"\xce" + struct.pack(">I", obj))
-        elif obj < 2**64:
+        elif isinstance(obj, np.uint64):
             fp.write(b"\xcf" + struct.pack(">Q", obj))
         else:
             raise UnsupportedTypeException("huge unsigned int")
@@ -323,11 +324,11 @@ def _pack_boolean(obj, fp, options):
 
 
 def _pack_float(obj, fp, options):
-    float_precision = options.get('force_float_precision', _float_precision)
+    #float_precision = options.get('force_float_precision', _float_precision)
 
-    if float_precision == "double":
+    if isinstance(obj, np.float64):
         fp.write(b"\xcb" + struct.pack(">d", obj))
-    elif float_precision == "single":
+    elif isinstance(obj, np.float32):
         fp.write(b"\xca" + struct.pack(">f", obj))
     else:
         raise ValueError("invalid float precision")
@@ -585,9 +586,9 @@ def _pack3(obj, fp, **options):
             raise NotImplementedError("Ext serializable class {:s} is missing implementation of packb()".format(repr(obj.__class__)))
     elif isinstance(obj, bool):
         _pack_boolean(obj, fp, options)
-    elif isinstance(obj, int):
+    elif isinstance(obj, np.integer):
         _pack_integer(obj, fp, options)
-    elif isinstance(obj, float):
+    elif isinstance(obj, (np.float32,np.float64)):
         _pack_float(obj, fp, options)
     elif compatibility and isinstance(obj, str):
         _pack_oldspec_raw(obj.encode('utf-8'), fp, options)
@@ -718,25 +719,25 @@ def _read_except(fp, n):
 
 def _unpack_integer(code, fp, options):
     if (ord(code) & 0xe0) == 0xe0:
-        return struct.unpack("b", code)[0]
+        return np.int8(struct.unpack("b", code)[0])
     elif code == b'\xd0':
-        return struct.unpack("b", _read_except(fp, 1))[0]
+        return np.int8(struct.unpack("b", _read_except(fp, 1))[0])
     elif code == b'\xd1':
-        return struct.unpack(">h", _read_except(fp, 2))[0]
+        return np.int16(struct.unpack(">h", _read_except(fp, 2))[0])
     elif code == b'\xd2':
-        return struct.unpack(">i", _read_except(fp, 4))[0]
+        return np.int32(struct.unpack(">i", _read_except(fp, 4))[0])
     elif code == b'\xd3':
-        return struct.unpack(">q", _read_except(fp, 8))[0]
+        return np.int64(struct.unpack(">q", _read_except(fp, 8))[0])
     elif (ord(code) & 0x80) == 0x00:
-        return struct.unpack("B", code)[0]
+        return np.uint8(struct.unpack("B", code)[0])
     elif code == b'\xcc':
-        return struct.unpack("B", _read_except(fp, 1))[0]
+        return np.uint8(struct.unpack("B", _read_except(fp, 1))[0])
     elif code == b'\xcd':
-        return struct.unpack(">H", _read_except(fp, 2))[0]
+        return np.uint16(struct.unpack(">H", _read_except(fp, 2))[0])
     elif code == b'\xce':
-        return struct.unpack(">I", _read_except(fp, 4))[0]
+        return np.uint32(struct.unpack(">I", _read_except(fp, 4))[0])
     elif code == b'\xcf':
-        return struct.unpack(">Q", _read_except(fp, 8))[0]
+        return np.uint64(struct.unpack(">Q", _read_except(fp, 8))[0])
     raise Exception("logic error, not int: 0x{:02x}".format(ord(code)))
 
 
@@ -764,9 +765,9 @@ def _unpack_boolean(code, fp, options):
 
 def _unpack_float(code, fp, options):
     if code == b'\xca':
-        return struct.unpack(">f", _read_except(fp, 4))[0]
+        return np.float32(struct.unpack(">f", _read_except(fp, 4))[0])
     elif code == b'\xcb':
-        return struct.unpack(">d", _read_except(fp, 8))[0]
+        return np.float64(struct.unpack(">d", _read_except(fp, 8))[0])
     raise Exception("logic error, not float: 0x{:02x}".format(ord(code)))
 
 
